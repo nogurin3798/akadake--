@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#1f6f8b"><link rel="manifest" href="manifest.json"><title>赤岳トレーニング・ログ V1.6</title>
+<style>
+*{box-sizing:border-box}body{font-family:system-ui,-apple-system,sans-serif;margin:0;background:#f5f7f8;color:#172027}
+header{background:#1f6f8b;color:white;padding:18px 16px;position:sticky;top:0;z-index:2}
+h1{font-size:21px;margin:0 0 5px}.sub{font-size:12px;opacity:.9}.wrap{max-width:900px;margin:auto;padding:12px}
+.week{margin:14px 0}.week h2{font-size:17px;margin:12px 0 7px}.grid{display:grid;grid-template-columns:repeat(7,1fr);gap:5px}.dow{text-align:center;font-size:11px;color:#667;padding:4px}
+.day{min-height:105px;background:white;border:1px solid #d9e0e3;border-radius:9px;padding:6px;cursor:pointer}.day.done{border:2px solid #1f6f8b}.date{font-weight:800;font-size:12px}.train{font-size:10px;line-height:1.35;margin-top:4px}.food{font-size:9px;color:#667;margin-top:5px}
+.panel{background:white;border:1px solid #d9e0e3;border-radius:12px;padding:14px;margin:12px 0}.panel h3{margin:0 0 8px;font-size:16px}
+label{display:block;font-size:12px;margin:8px 0 3px}input,textarea,button{font:inherit}input,textarea{width:100%;padding:9px;border:1px solid #bcc8cd;border-radius:7px}button{padding:9px 12px;border:0;border-radius:8px;background:#1f6f8b;color:#fff;cursor:pointer;margin-top:9px}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}.stat{background:#eef3f5;border-radius:8px;padding:9px}.stat b{display:block;font-size:18px}.small{font-size:11px;color:#667}
+@media(max-width:600px){.day{min-height:88px}.stats{grid-template-columns:repeat(2,1fr)}}
+</style></head><body>
+<header><h1>🏔️ 赤岳トレーニング・ログ</h1><div class="sub">目標：赤岳 2,899m｜17km｜+1,494m｜約9時間｜ピーク時10kg</div></header>
+<div class="wrap">
+<div class="panel"><h3>🎯 本番まで</h3><div class="stats"><div class="stat"><span class="small">本番目標</span><b>10kg</b><span class="small">ピークハント</span></div><div class="stat"><span class="small">距離</span><b>17km</b></div><div class="stat"><span class="small">登り</span><b>1,494m</b></div><div class="stat"><span class="small">時間</span><b>約9h</b></div></div></div>
+<div id="calendar"></div>
+<div class="panel" id="detail"><h3>選択した日付の詳細</h3><div class="small">赤岳8週間プログラム＋月〜金の強化トレーニングを統合しています。</div></div>
+</div>
+<script>
+const foods=[
+"朝：ご飯＋納豆＋卵＋味噌汁｜昼：サバ缶＋玉ねぎ＋ご飯｜夜：鶏肉＋野菜＋ご飯",
+"朝：ご飯＋焼き魚＋味噌汁｜昼：そば＋卵＋鶏肉｜夜：鮭＋ご飯＋野菜",
+"朝：ご飯＋卵＋ヨーグルト＋バナナ｜昼：鶏肉＋ご飯＋野菜｜夜：サバ＋豆腐＋ご飯",
+"朝：ご飯＋魚＋卵｜昼：サバ玉ねぎ丼｜夜：豚しゃぶ＋野菜＋ご飯"];
+const special={
+"2026-08-29":["🛌 回復・30分散歩","ザックなし","開始日は疲労回復優先",0],
+"2026-08-30":["🚶 平地45分","Borg 10–11","基礎作り",1],
+"2026-08-31":["🛌 休養","ストレッチ","睡眠確保",2],
+"2026-09-01":["🚶 坂道40分","3kg／Borg 11–12","登りはゆっくり",3],
+"2026-09-02":["🏋️ 筋トレ20分","スクワット10×2ほか","ステップアップ・ダウン",0],
+"2026-09-05":["🥾 低山2時間","4kg／+200～300m","5～7km・行動食を試す",3],
+"2026-09-12":["🥾 低山2.5～3時間","5kg／+300～500m","7～9km",2],
+"2026-09-19":["🥾 低山3.5～4時間","6kg／+500～700m","8～11km・装備確認",1],
+"2026-09-26":["🥾 山行4～5時間","7kg／+700～900m","10～12km・補給練習",0],
+"2026-10-03":["🥾 山行5～6時間","8kg／+800～1,100m","11～14km・本番補給",3],
+"2026-10-10":["🔥🥾 本番シミュレーション6～8時間","9～10kg／+1,000～1,300m","13～15km・本番装備",2],
+"2026-10-17":["🚶 調整45分","3～5kg","疲労を抜く",1],
+"2026-10-24":["🏔️ 赤岳本番候補","17km／+1,494m／約9時間／10kg","天候・体調でGO/NO-GO",0],
+"2026-10-25":["🏔️ 赤岳本番候補","17km／+1,494m／約9時間／10kg","本番日が25日の場合",1]};
+let selected=null;
+function iso(d){return d.toISOString().slice(0,10)}
+// 月〜金：添付ファイルの曜日固定「強化トレーニング」
+function strengthPlan(d){
+ const w=d.getUTCDay();
+ const plans={
+  1:["🏋️ 上半身プッシュ","ノンロック・フロアプレス 15～20回×4｜ダンベルフライ 15回×4｜二の腕キックバック 12～15回×4","胸・二の腕。フォーム優先、痛みが出たら中止"],
+  2:["🥊 肩・上背部","サポーター・シャドーボクシング 3分×2R｜ダンベル・シュラッグ 20回×3","反動を使わず、肩・背中の安定性を高める"],
+  3:["🧘 臀部・背骨コンディショニング","ノーマル・ヒップリフト 20回×3｜キャット＆カウ 10回","疲労を抜きながら臀部と背骨の動きを整える"],
+  4:["🦵 下半身強化","1.5レップ・ブルガリアン 左右各10回×4｜ダンベル・ヒップリフト 20回×4｜レッグエクステンション 左右各20回×3","赤岳の登り・下りに直結。膝の向きと臀部の使い方を確認"],
+  5:["🦶 足首・股関節","サポーター・アンクルホップ 30秒×3｜股関節ストレッチ（シコ踏み10回）","軽快に弾み、着地は静かに。疲労を残さない"]
+ };
+ return plans[w]||null;
+}
+
+// 元の「赤岳8週間プログラム」：登山体力・持久力づくり
+function mountainPlan(d){
+ const key=iso(d);
+ const dated={
+  "2026-08-29":["回復・30分散歩","ザックなし","開始日は疲労回復優先"],
+  "2026-08-30":["平地45分","Borg 10～11","基礎作り"],
+  "2026-08-31":["休養＋ストレッチ","軽め","睡眠確保"],
+  "2026-09-01":["坂道40分","3kg／Borg 11～12","登りはゆっくり"],
+  "2026-09-02":["ステップアップ＋下半身補強","自重中心","フォーム習得"],
+  "2026-09-05":["低山2時間","4kg／+200～300m／5～7km","行動食を試す"],
+  "2026-09-12":["低山2.5～3時間","5kg／+300～500m／7～9km","持久力強化"],
+  "2026-09-19":["低山3.5～4時間","6kg／+500～700m／8～11km","装備確認"],
+  "2026-09-26":["山行4～5時間","7kg／+700～900m／10～12km","補給練習"],
+  "2026-10-03":["山行5～6時間","8kg／+800～1,100m／11～14km","本番補給"],
+  "2026-10-10":["本番シミュレーション6～8時間","9～10kg／+1,000～1,300m／13～15km","本番装備"],
+  "2026-10-17":["調整ウォーク45分","3～5kg","疲労を抜く"],
+  "2026-10-24":["赤岳本番候補","17km／+1,494m／約9時間／10kg","天候・体調でGO/NO-GO"],
+  "2026-10-25":["赤岳本番候補","17km／+1,494m／約9時間／10kg","本番日が25日の場合"]
+ };
+ if(dated[key]) return dated[key];
+
+ // 元プログラムの平日ベース
+ const w=d.getUTCDay();
+ if(w===1) return ["回復・休養","軽いストレッチ","筋肉の回復を優先"];
+ if(w===2 || w===4) return ["ウォーキング／坂道","30～60分・Borg 11～13","有酸素持久力づくり"];
+ if(w===3) return ["登山脚トレーニング","ステップアップ＋ステップダウン","登り・下りの脚づくり"];
+ if(w===5) return ["休養","完全休養または軽い散歩","睡眠確保"];
+ if(w===0) return ["休養・回復","完全休養または軽いストレッチ","翌週に疲労を残さない"];
+ return ["山歩き","週目標のザック重量","実績を記録"];
+}
+
+// カレンダー表示・詳細画面用に両方を統合
+function planFor(d){
+ const w=d.getUTCDay();
+ const strength=strengthPlan(d);
+ const mountain=mountainPlan(d);
+ const foodIndex=(w+3)%4;
+
+ if(strength && mountain){
+   return {
+     title:"💪 "+strength[0]+" ＋ 🥾 "+mountain[0],
+     short:"💪 "+strength[0]+"｜🥾 "+mountain[0],
+     strength:strength,
+     mountain:mountain,
+     food:foodIndex
+   };
+ }
+ return {
+   title:"🥾 "+mountain[0],
+   short:"🥾 "+mountain[0],
+   strength:null,
+   mountain:mountain,
+   food:foodIndex
+ };
+}
+function render(){
+ const cal=document.getElementById("calendar");cal.innerHTML="";
+ const startDate=new Date(Date.UTC(2026,7,29));
+ const endDate=new Date(Date.UTC(2026,9,25));
+ const firstWeek=new Date(startDate);
+ const firstDow=(firstWeek.getUTCDay()+6)%7;
+ firstWeek.setUTCDate(firstWeek.getUTCDate()-firstDow);
+
+ let weekStart=new Date(firstWeek), weekNo=0;
+ while(weekStart<=endDate){
+   const week=document.createElement("div");
+   week.className="week";
+   week.innerHTML="<h2>週 "+(++weekNo)+"</h2><div class='grid'><div class='dow'>月</div><div class='dow'>火</div><div class='dow'>水</div><div class='dow'>木</div><div class='dow'>金</div><div class='dow'>土</div><div class='dow'>日</div></div>";
+   const grid=week.querySelector(".grid");
+
+   for(let i=0;i<7;i++){
+     const day=new Date(weekStart);
+     day.setUTCDate(weekStart.getUTCDate()+i);
+     const key=iso(day);
+     const cell=document.createElement("div");
+
+     if(day<startDate || day>endDate){
+       cell.className="day"; cell.style.visibility="hidden"; grid.appendChild(cell); continue;
+     }
+
+     const plan=planFor(day);
+     cell.className="day";
+     if(localStorage.getItem("done-"+key)==="1") cell.classList.add("done");
+     const miniStrength=plan.strength ? "<div class='train'>💪 "+plan.strength[0]+"</div>" : "";
+     cell.innerHTML="<div class='date'>"+(day.getUTCMonth()+1)+"/"+day.getUTCDate()+"</div>"
+       +miniStrength
+       +"<div class='train'>🥾 "+plan.mountain[0]+"<br>"+plan.mountain[1]+"</div>"
+       +"<div class='food'>"+foods[plan.food].split("｜")[0]+"</div>";
+     cell.onclick=()=>show(new Date(day),plan,cell);
+     grid.appendChild(cell);
+   }
+   cal.appendChild(week);
+   weekStart.setUTCDate(weekStart.getUTCDate()+7);
+ }
+}
+function show(d,plan,e){
+ selected=iso(d);
+ let old=JSON.parse(localStorage.getItem("log-"+selected)||"{}");
+ const strengthHtml=plan.strength
+   ? `<div class="panel"><h3>💪 強化トレーニング</h3><p><b>${plan.strength[0]}</b></p><p>${plan.strength[1]}</p><p class="small">${plan.strength[2]}</p></div>`
+   : "";
+ const mountainHtml=`<div class="panel"><h3>🥾 赤岳8週間プログラム</h3><p><b>${plan.mountain[0]}</b></p><p><b>内容：</b>${plan.mountain[1]}</p><p><b>ポイント：</b>${plan.mountain[2]}</p></div>`;
+
+ const selectedLabel=selected.replaceAll("-","/");
+ document.getElementById("detail").innerHTML=
+ `<h3>📅 ${selectedLabel}　統合トレーニング</h3>`
+ + strengthHtml + mountainHtml
+ + `<div class="panel"><h3>🍚 食事</h3><p>${foods[plan.food]}</p></div>
+ <label>☑ トレーニング完了</label><input id="done" type="checkbox" ${old.done?"checked":""} style="width:auto">
+ <label>距離 km</label><input id="km" type="number" step="0.1" value="${old.km||""}">
+ <label>時間（分）</label><input id="min" type="number" value="${old.min||""}">
+ <label>累積上昇 m</label><input id="up" type="number" value="${old.up||""}">
+ <label>ザック kg</label><input id="pack" type="number" step="0.1" value="${old.pack||""}">
+ <label>平均心拍 bpm</label><input id="hr" type="number" value="${old.hr||""}">
+ <label>Borg</label><input id="borg" type="number" step="0.5" value="${old.borg||""}">
+ <label>翌日の疲労 0～10</label><input id="fatigue" type="number" min="0" max="10" value="${old.fatigue||""}">
+ <label>メモ</label><textarea id="memo">${old.memo||""}</textarea><button id="save">保存</button>`;
+
+ document.getElementById("save").onclick=()=>{
+   let x={
+     done:document.getElementById("done").checked,
+     km:document.getElementById("km").value,
+     min:document.getElementById("min").value,
+     up:document.getElementById("up").value,
+     pack:document.getElementById("pack").value,
+     hr:document.getElementById("hr").value,
+     borg:document.getElementById("borg").value,
+     fatigue:document.getElementById("fatigue").value,
+     memo:document.getElementById("memo").value
+   };
+   localStorage.setItem("log-"+selected,JSON.stringify(x));
+   localStorage.setItem("done-"+selected,x.done?"1":"0");
+   render(); show(d,plan,e);
+ };
+}
+render();
+if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js?v=6").catch(()=>{});
+</script></body></html>
